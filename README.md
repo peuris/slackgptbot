@@ -1,5 +1,5 @@
 # Introduction
-openAI ChatGPT integrated into slack
+openAI ChatGPT integrated into slack with Python
 
 ## Getting Started
 to use this repository, install required packages:
