@@ -12,7 +12,7 @@ pip3 install -r requirements.txt
 2. ngrok - https://ngrok.com/ for your https to http tunnel between slack webhooks and bot (default port 4000)
 4. Configure your slack bot (for example: https://chatimize.com/slack-chatbot/)
 5. Configure config.py with necessary tokens
-6. Configure your chat GTP API (https://platform.openai.com/signup)
+6. Configure your chat GPT API (https://platform.openai.com/signup)
 
 default model = gpt-3.5-turbo - change in config
 docs: https://platform.openai.com/docs/guides/chat
