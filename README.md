@@ -3,6 +3,7 @@ openAI ChatGPT integrated into slack with Python
 
 ## Getting Started
 to use this repository, install required packages:
+
 Python 3.11 with latest additions mandatory (GIL streamline)
 
 1. Python 3.11
