@@ -9,6 +9,13 @@ from cryptography.fernet import Fernet
 import base64
 import traceback, sys
 import config
+import gc
+
+# lets make gil more streamlined
+gc.collect(2)
+gc.freeze()
+allocs, g1, g2 = gc.get_threshold()
+gc.set_threshold(100_000, g1*5, g2*10)
 
 # Initialize Flask app
 app = Flask(__name__)
