@@ -7,11 +7,14 @@ to use this repository, install required packages:
 Python 3.11 with latest additions mandatory (GIL streamline)
 
 1. Python 3.11
+2. Install required libraries
+
 using the following command:
 ```
 pip3 install -r requirements.txt
 ```
-2. ngrok - https://ngrok.com/ for your https to http tunnel between slack webhooks and bot (default port 4000)
+
+3. ngrok - https://ngrok.com/ for your https to http tunnel between slack webhooks and bot (default port 4000)
 4. Configure your slack bot (for example: https://chatimize.com/slack-chatbot/)
 5. Configure config.py with necessary tokens
 6. Configure your chat GPT API (https://platform.openai.com/signup)
