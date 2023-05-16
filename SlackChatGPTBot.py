@@ -9,9 +9,10 @@ from cryptography.fernet import Fernet
 import base64
 import traceback, sys
 import config
+import tiktoken
 import gc
 
-# lets make gil more streamlined
+# lets make CG more streamlined
 gc.collect(2)
 gc.freeze()
 allocs, g1, g2 = gc.get_threshold()
@@ -39,6 +40,7 @@ def close_db(e=None):
 def teardown_db(e=None):
     close_db(e)
 
+# Database setup
 def setup_database():
     conn = sqlite3.connect("chat_history.db")
     cursor = conn.cursor()
@@ -73,7 +75,6 @@ def setup_database():
 
     conn.commit()
     conn.close()
-
 
 class DBClient:
     def __init__(self):
@@ -137,10 +138,14 @@ class DBClient:
         else:
             return False
 
-
 class SecureOpenAIChatGPTClient:
     def __init__(self, db_client):
         self.db_client = db_client
+
+    def count_tokens(self, message):
+        encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
+        num_tokens = len(encoding.encode(message))
+        return num_tokens
 
     def send_message(self, message, user_id, conversation_id, client_msg_id):
         try:
@@ -152,6 +157,11 @@ class SecureOpenAIChatGPTClient:
             if client_msg_id in client_message_id_list:
                 return False
             
+            token_count = self.count_tokens(message)
+
+            if token_count > 2045:
+                return f"Message is too long {token_count}/2045 tokens to reply back to you. Please try again with a shorter message."
+
             # check db if message already exists
             if self.db_client.get_message(client_msg_id):
                 return False
@@ -159,23 +169,32 @@ class SecureOpenAIChatGPTClient:
             client_message_id_list.append(client_msg_id)
             conversation_history = self.db_client.get_conversation_history(user_id, conversation_id)
             
+            context_total = ''
             session_messages = []
             for i in range(len(conversation_history)):
                 role = "assistant" if i % 2 else "user"
                 if role == "assistant":
+                    context_total += conversation_history[i]['content']
+                    if self.count_tokens(context_total+message) > 3000:
+                        break
+                    
                     session_messages.append({"role": role, "content": conversation_history[i]['content']})
+   
+            context_total = '' # some clearing
             
             # append the latest to last in list
             session_messages.append({"role": "user", "content": message})
-            #print(session_messages)
-
-            response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
-                messages=session_messages,
-                temperature=0.7,
-                max_tokens=2045,
-                stream=True,
-            )
+            try:
+                response = openai.ChatCompletion.create(
+                    model="gpt-3.5-turbo",
+                    messages=session_messages,
+                    temperature=0.7,
+                    max_tokens=2045,
+                    stream=True,
+                )
+            
+            except openai.error.InvalidRequestError as __myerror:
+                return str(__myerror)
 
             collected_messages = []
             
@@ -194,7 +213,7 @@ class SecureOpenAIChatGPTClient:
             print(traceback.print_exc(file=sys.stdout))
             return "ERROR"
 
-
+# flask_bot.py
 def format_response(response):
     """
     Format the OpenAI Chatbot's response in Slack's code block style
@@ -206,6 +225,7 @@ def format_response(response):
 def handle_root():
     event = request.json
     try:
+        #print(event)
         token = event.get("token")
         challenge = event.get("challenge")
         event_type = event.get("type")
