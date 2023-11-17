@@ -12,7 +12,7 @@ import config
 import tiktoken
 import gc
 
-# lets make CG more streamlined
+# lets make gil more streamlined
 gc.collect(2)
 gc.freeze()
 allocs, g1, g2 = gc.get_threshold()
@@ -24,6 +24,7 @@ app = Flask(__name__)
 global client_message_id_list
 client_message_id_list = []
 
+# dbapi.py - part here ---
 def get_db():
     if 'db' not in g:
         g.db = sqlite3.connect("chat_history.db")
@@ -138,20 +139,23 @@ class DBClient:
         else:
             return False
 
+# oaicon.py - part here ---
 class SecureOpenAIChatGPTClient:
     def __init__(self, db_client):
         self.db_client = db_client
 
-    def count_tokens(self, message):
-        encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
+    def count_tokens(self, message=None, encoding_model=None):
+        if not encoding_model:
+            encoding_model = config.OPENAI_ENGINE # as default
+        encoding = tiktoken.encoding_for_model(encoding_model)
         num_tokens = len(encoding.encode(message))
         return num_tokens
 
     def send_message(self, message, user_id, conversation_id, client_msg_id):
         try:
-            # remove from the list if more than 100 messages
-            if len(client_message_id_list) > 100:
-                del client_message_id_list[20:]
+            # remove from the list if more than 150 messages
+            if len(client_message_id_list) > 150:
+                del client_message_id_list[50:]
             
             # check memory first if message already exists
             if client_msg_id in client_message_id_list:
@@ -159,8 +163,8 @@ class SecureOpenAIChatGPTClient:
             
             token_count = self.count_tokens(message)
 
-            if token_count > 2045:
-                return f"Message is too long {token_count}/2045 tokens to reply back to you. Please try again with a shorter message."
+            if token_count > 4096:
+                return f"Message is too long {token_count}/4096 tokens to reply back to you. Please try again with a shorter message."
 
             # check db if message already exists
             if self.db_client.get_message(client_msg_id):
@@ -175,7 +179,7 @@ class SecureOpenAIChatGPTClient:
                 role = "assistant" if i % 2 else "user"
                 if role == "assistant":
                     context_total += conversation_history[i]['content']
-                    if self.count_tokens(context_total+message) > 3000:
+                    if self.count_tokens(context_total+message) > 4096:
                         break
                     
                     session_messages.append({"role": role, "content": conversation_history[i]['content']})
@@ -186,15 +190,18 @@ class SecureOpenAIChatGPTClient:
             session_messages.append({"role": "user", "content": message})
             try:
                 response = openai.ChatCompletion.create(
-                    model="gpt-3.5-turbo",
+                    model=config.OPENAI_ENGINE,
                     messages=session_messages,
                     temperature=0.7,
-                    max_tokens=2045,
+                    max_tokens=4096,
                     stream=True,
                 )
             
-            except openai.error.InvalidRequestError as __myerror:
-                return str(__myerror)
+            except openai.error.InvalidRequestError as __request_error:
+                return str(__request_error)
+            
+            except openai.error.APIError as __api_error:
+                return str(__api_error)
 
             collected_messages = []
             
@@ -213,7 +220,7 @@ class SecureOpenAIChatGPTClient:
             print(traceback.print_exc(file=sys.stdout))
             return "ERROR"
 
-# flask_bot.py
+# flask_bot.py - part here ---
 def format_response(response):
     """
     Format the OpenAI Chatbot's response in Slack's code block style
@@ -247,6 +254,7 @@ def handle_root():
 def handle_event():
     event = request.json
     event_type = event.get("type")
+    #print(event)
 
     # slack verification event handling
     if event_type == "url_verification":
@@ -377,5 +385,11 @@ openai.api_key = config.OPENAI_API_KEY
 global oaic_client
 oaic_client = SecureOpenAIChatGPTClient(db_client)
 
+# only with DNS on, comment out for ngrok
+full_chain_path = "/fullchain.pem"
+priv_key_path = "/privkey.pem"
+
+
 if __name__ == "__main__":
-    app.run(port=4000)
+    #app.run(port=4000) # with ngrok
+    app.run(host='0.0.0.0', port=443, ssl_context=(full_chain_path, priv_key_path))
